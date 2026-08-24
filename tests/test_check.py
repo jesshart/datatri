@@ -8,21 +8,43 @@ def flags(df: pl.DataFrame, check: Check) -> list[bool]:
     return df.select(check.marker).to_series().to_list()
 
 
-def test_unique_condemns_every_copy():
+def test_unique_condemns_every_copy_with_its_own_reason():
     df = pl.DataFrame({"sku": ["sku1", "sku2", "sku2", "sku3"]})
-    assert flags(df, unique("sku")) == [False, True, True, False]
+    dup, null = unique("sku")
+    assert flags(df, dup) == [False, True, True, False]
+    assert flags(df, null) == [False] * 4
+    assert (dup.id, null.id) == ("sku.duplicated", "sku.null")
+    assert (dup.dimension, null.dimension) == ("grain", "completeness")
 
 
-def test_unique_null_key_is_sick_by_default():
-    df = pl.DataFrame({"sku": ["a", None, "b"]})
-    assert flags(df, unique("sku")) == [False, True, False]
-    assert flags(df, unique("sku", nulls_sick=False)) == [False, False, False]
+def test_unique_null_key_is_completeness_not_duplication():
+    df = pl.DataFrame({"sku": ["a", None, "b", None]})
+    dup, null = unique("sku")
+    assert flags(df, dup) == [False] * 4  # two nulls are NOT copies of each other
+    assert flags(df, null) == [False, True, False, True]
+    (only,) = unique("sku", nulls_sick=False)
+    assert only.id == "sku.duplicated"
 
 
 def test_unique_composite_key():
     df = pl.DataFrame({"a": [1, 1, 2], "b": ["x", "x", "x"]})
-    assert flags(df, unique(["a", "b"])) == [True, True, False]
-    assert unique(["a", "b"]).id == "a+b.unique"
+    dup, _ = unique(["a", "b"])
+    assert flags(df, dup) == [True, True, False]
+    assert [c.id for c in unique(["a", "b"])] == ["a+b.duplicated", "a+b.null"]
+    assert [c.id for c in unique(["a", "b"], id="grain")] == ["grain.duplicated", "grain.null"]
+    assert [c.dimension for c in unique("a", dimension="key")] == ["key", "key"]
+
+
+def test_briefs_default_and_override():
+    assert not_null("c").brief == "c must not be null"
+    assert in_range("v", 0, 10).brief == "v must be >= 0 and <= 10"
+    assert in_range("v", hi=5, closed="none").brief == "v must be < 5"
+    assert in_set("s", ["A", "B"]).brief == "s must be one of ['A', 'B']"
+    assert matches("e", "^x$").brief == "e must match ^x$"
+    assert [c.brief for c in unique("k")] == ["k must be unique", "k must not be null"]
+    assert sick("x", pl.lit(True)).brief is None
+    assert sick("x", pl.lit(True), brief="shipped after requested delivery").brief == "shipped after requested delivery"
+    assert not_null("c", brief="custom").brief == "custom"
 
 
 def test_not_null():

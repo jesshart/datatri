@@ -79,7 +79,7 @@ def conserve(
 def safe_join(
     left: pl.DataFrame | pl.LazyFrame,
     right: pl.DataFrame | pl.LazyFrame,
-    on: str | list[str],
+    on: str | list[str] | None = None,
     *,
     how: str = "left",
     measures: Mapping[str, pl.Expr] | None = None,
@@ -88,6 +88,7 @@ def safe_join(
 ) -> tuple[pl.LazyFrame, ConserveResult]:
     """Join, then report conservation of the driving (left) side.
 
+    ``on`` may be omitted in favour of ``left_on=`` / ``right_on=``.
     Reports, never raises. To hard-stop instead, pass Polars' own guard
     through: ``validate="m:1"`` raises at collect with no offending-key
     detail — the cheap happy path; run the diagnostic only on failure.

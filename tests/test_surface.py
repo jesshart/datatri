@@ -9,8 +9,8 @@ from datatri.triage import rollup
 def test_surface_stamps_its_name(dirty):
     s = Surface("orders-input", [unique("id"), not_null("qty")])
     r = s.triage(dirty)
-    assert r.report["surface"].to_list() == ["orders-input"] * 2
-    assert len(s) == 2 and [c.id for c in s] == ["id.unique", "qty.not_null"]
+    assert r.report["surface"].to_list() == ["orders-input"] * 3
+    assert len(s) == 3 and [c.id for c in s] == ["id.duplicated", "id.null", "qty.not_null"]
 
 
 def test_surfaces_roll_up_and_gate_independently(dirty):
@@ -20,7 +20,7 @@ def test_surfaces_roll_up_and_gate_independently(dirty):
 
     by_surface = rollup(report, "surface")
     assert by_surface.rows() == [
-        ("orders-input", 2, 2, 4, 0.0),
+        ("orders-input", 3, 3, 4, 0.0),  # id.duplicated (2 rows) + id.null (1) + qty.not_null (1)
         ("shipment-output", 1, 0, 0, 1.0),
     ]
     # gate one named surface, leave the other alone

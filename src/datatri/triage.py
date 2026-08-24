@@ -22,12 +22,12 @@ from pathlib import Path
 
 import polars as pl
 
-from datatri.check import Check
+from datatri.check import Check, flatten
 
 N_COL = "__n_total__"
 WHY = "why"
 RESERVED = frozenset(
-    {"check_id", "surface", "dimension", "severity", "n_failed", "n_total", "frac_failed", "passed"}
+    {"check_id", "surface", "dimension", "severity", "brief", "n_failed", "n_total", "frac_failed", "passed"}
 )
 
 
@@ -77,12 +77,12 @@ class TriageResult:
 
 def triage(
     frame: pl.DataFrame | pl.LazyFrame,
-    checks: Iterable[Check],
+    checks: Iterable[Check | Iterable[Check]],
     *,
     surface: str | None = None,
 ) -> TriageResult:
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
-    checks = tuple(checks)
+    checks = flatten(checks)
     _validate(checks)
 
     # Phase 1 — one folded pass, one row out.
@@ -144,6 +144,7 @@ def _report(checks: tuple[Check, ...], row: dict, surface: str | None) -> pl.Dat
         "surface": pl.String,
         "dimension": pl.String,
         "severity": pl.String,
+        "brief": pl.String,
         **{k: pl.String for k in tag_keys},
         "n_failed": pl.UInt32,
         "n_total": pl.UInt32,
@@ -154,6 +155,7 @@ def _report(checks: tuple[Check, ...], row: dict, surface: str | None) -> pl.Dat
             "surface": surface,
             "dimension": c.dimension,
             "severity": c.severity,
+            "brief": c.brief,
             **{k: c.tags.get(k) for k in tag_keys},
             "n_failed": row[c.id],
             "n_total": row[N_COL],

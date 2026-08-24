@@ -25,6 +25,7 @@ class Check:
     dimension: str = "validity"
     severity: str = "warn"
     tags: Mapping[str, str] = field(default_factory=dict)
+    brief: str | None = None  # one plain-language line for the report; say what a hit MEANS
 
     def __post_init__(self) -> None:
         if not self.id:
@@ -45,6 +46,19 @@ class Check:
         return self.sick.fill_null(False)
 
 
+def flatten(checks: Iterable[Check | Iterable[Check]]) -> tuple[Check, ...]:
+    """Accept checks or nested lists of checks (builders like ``unique`` return several)."""
+    out: list[Check] = []
+    for c in checks:
+        if isinstance(c, Check):
+            out.append(c)
+        elif isinstance(c, (str, bytes)):
+            raise TypeError(f"expected a Check, got {c!r}")
+        else:
+            out.extend(flatten(c))
+    return tuple(out)
+
+
 # --- builders ---------------------------------------------------------------
 
 
@@ -60,6 +74,7 @@ def healthy(id: str, expr: pl.Expr, **kw) -> Check:
 
 def not_null(col: str, *, id: str | None = None, **kw) -> Check:
     kw.setdefault("dimension", "completeness")
+    kw.setdefault("brief", f"{col} must not be null")
     return Check(id or f"{col}.not_null", pl.col(col).is_null(), **kw)
 
 
@@ -69,20 +84,39 @@ def unique(
     id: str | None = None,
     nulls_sick: bool = True,
     **kw,
-) -> Check:
-    """Grain check: every copy of a duplicated key is sick.
+) -> tuple[Check, ...]:
+    """Grain check, as two checks with their own reasons: ``<key>.duplicated``
+    and (by default) ``<key>.null``.
 
-    ``is_duplicated`` flags all rows of a duplicate group. It treats two nulls
-    as duplicates of each other but lets a *single* null key through — and a
-    null key is still unjoinable — so by default a null key is sick too.
+    Every copy of a duplicated key is sick. A null key is unjoinable, so it is
+    sick too — but as a *completeness* failure, never counted as a duplicate:
+    two null keys are not copies of each other. ``id`` sets the key name used
+    in both ids. Pass the result straight into a check list; it flattens.
     """
-    kw.setdefault("dimension", "grain")
     cols = [cols] if isinstance(cols, str) else list(cols)
+    name = id or "+".join(cols)
+    label = "+".join(cols)
+    user_dim = kw.pop("dimension", None)
+    brief = kw.pop("brief", None)
     key = pl.col(cols[0]) if len(cols) == 1 else pl.struct(cols)
-    marker = key.is_duplicated()
-    if nulls_sick:
-        marker = marker | pl.any_horizontal([pl.col(c).is_null() for c in cols])
-    return Check(id or f"{'+'.join(cols)}.unique", marker, **kw)
+    is_null = pl.any_horizontal([pl.col(c).is_null() for c in cols])
+    dup = Check(
+        f"{name}.duplicated",
+        key.is_duplicated() & ~is_null,
+        dimension=user_dim or "grain",
+        brief=brief or f"{label} must be unique",
+        **kw,
+    )
+    if not nulls_sick:
+        return (dup,)
+    null = Check(
+        f"{name}.null",
+        is_null,
+        dimension=user_dim or "completeness",
+        brief=f"{label} must not be null",
+        **kw,
+    )
+    return (dup, null)
 
 
 def in_range(
@@ -96,18 +130,27 @@ def in_range(
 ) -> Check:
     if lo is None and hi is None:
         raise ValueError("in_range needs at least one bound")
-    parts = []
+    parts, words = [], []
     if lo is not None:
-        parts.append(pl.col(col) >= lo if closed in ("both", "left") else pl.col(col) > lo)
+        inclusive = closed in ("both", "left")
+        parts.append(pl.col(col) >= lo if inclusive else pl.col(col) > lo)
+        words.append(f"{'>=' if inclusive else '>'} {lo}")
     if hi is not None:
-        parts.append(pl.col(col) <= hi if closed in ("both", "right") else pl.col(col) < hi)
+        inclusive = closed in ("both", "right")
+        parts.append(pl.col(col) <= hi if inclusive else pl.col(col) < hi)
+        words.append(f"{'<=' if inclusive else '<'} {hi}")
+    kw.setdefault("brief", f"{col} must be {' and '.join(words)}")
     return Check(id or f"{col}.in_range", ~pl.all_horizontal(parts), **kw)
 
 
 def in_set(col: str, values: Iterable, *, id: str | None = None, **kw) -> Check:
-    return Check(id or f"{col}.in_set", ~pl.col(col).is_in(list(values)), **kw)
+    values = list(values)
+    shown = values if len(values) <= 5 else values[:5] + ["…"]
+    kw.setdefault("brief", f"{col} must be one of {shown}")
+    return Check(id or f"{col}.in_set", ~pl.col(col).is_in(values), **kw)
 
 
 def matches(col: str, pattern: str, *, id: str | None = None, **kw) -> Check:
     """Format validity. Polars regex is the Rust crate: no lookarounds or backrefs."""
+    kw.setdefault("brief", f"{col} must match {pattern}")
     return Check(id or f"{col}.matches", ~pl.col(col).str.contains(pattern), **kw)

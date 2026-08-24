@@ -25,27 +25,32 @@
 ## Checks
 
 ```python
-dti.Check(id, sick: pl.Expr, dimension="validity", severity="warn", tags={})
+dti.Check(id, sick: pl.Expr, dimension="validity", severity="warn", tags={}, brief=None)
 ```
 
-`severity` is `"warn"` (default) or `"block"`. `Check.marker` is `sick.fill_null(False)`:
-a predicate that can't be evaluated (`qty <= 0` on a null qty) is *not* sick by that check —
+`severity` is `"warn"` (default) or `"block"`. `brief` is one plain-language line that rides
+into the report — say what a hit *means* (`"shipped after requested delivery"`), not what the
+expression does; builders fill a default. `Check.marker` is `sick.fill_null(False)`: a
+predicate that can't be evaluated (`qty <= 0` on a null qty) is *not* sick by that check —
 nullness belongs to `not_null`. That fill is what keeps the partition complete.
 
 | builder | sick when | dimension | notes |
 |---|---|---|---|
-| `dti.sick(id, expr)` | `expr` | validity | escape hatch |
+| `dti.sick(id, expr)` | `expr` | validity | escape hatch; no default brief |
 | `dti.healthy(id, expr)` | `~expr` | validity | same, phrased positively |
 | `dti.not_null(col)` | null | completeness | id `col.not_null` |
-| `dti.unique(cols, nulls_sick=True)` | key duplicated, or null | grain | **all** copies flagged; `cols` may be a list (composite key); id `a+b.unique` |
+| `dti.unique(cols, nulls_sick=True)` | **returns two checks**: `<key>.duplicated` (a non-null key with copies; grain) and `<key>.null` (completeness) | grain + completeness | **all** copies flagged; two nulls are *not* copies of each other; `cols` may be a list (composite, id `a+b.…`); `id=` renames the key; `nulls_sick=False` drops the `.null` check |
 | `dti.in_range(col, lo, hi, closed="both")` | outside bounds | validity | either bound optional |
 | `dti.in_set(col, values)` | not in values | validity | |
 | `dti.matches(col, pattern)` | regex miss | validity | Rust regex: no lookarounds/backrefs |
 
-Every builder accepts `id=`, `severity=`, `tags=`, `dimension=`.
+Every builder accepts `id=`, `severity=`, `tags=`, `dimension=`, `brief=`. Check lists may
+be nested — `[dti.unique("id"), dti.not_null("qty")]` flattens — so builders that return
+several checks drop straight in.
 
-Why `unique` flags null keys: `is_duplicated()` treats two nulls as duplicates but lets a
-*single* null through, and a null key is still unjoinable.
+Why `unique` emits a separate `.null` reason: a null key is unjoinable, but calling it a
+"duplicate" misleads the owner — on real data a composite-grain check once reported 2,542
+"duplicates" that were all one null column.
 
 ## triage and TriageResult
 
@@ -73,7 +78,7 @@ Cost: the report is exactly one aggregate scan, reading only the columns the che
 
 ## Report and rollup
 
-Report columns: `check_id, surface, dimension, severity, <tags…>, n_failed, n_total,
+Report columns: `check_id, surface, dimension, severity, brief, <tags…>, n_failed, n_total,
 frac_failed, passed`. Tag keys are unioned across checks; a check without a tag gets null.
 
 ```python
@@ -111,8 +116,10 @@ types are exact: `Datetime("us","UTC") != Datetime("ns","UTC")`, `List(Int32) !=
 cons = dti.conserve(before, after, measures={"units": pl.col("units").sum()}, rows=True, tol=0.0)
 cons.ok; cons.violations; cons.to_frame()     # measure, before, after, ok
 
-joined, cons = dti.safe_join(left, right, on, how="left", measures=..., tol=0.0, **join_kwargs)
+joined, cons = dti.safe_join(left, right, on=None, how="left", measures=..., tol=0.0, **join_kwargs)
 ```
+
+`on` is optional — `left_on=` / `right_on=` pass through to Polars.
 
 - `conserve` compares one row of aggregates per side. `rows` adds `pl.len()`. `tol` applies to
   numeric measures.

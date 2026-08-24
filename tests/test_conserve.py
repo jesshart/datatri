@@ -70,6 +70,10 @@ def test_triage_the_dim_then_join_healthy_conserves_the_total(fact, dirty_dim):
     dim = triage(dirty_dim, [unique("sku")])
     assert dim.sick.collect().height == 2  # both copies to the doctor
 
+    # `on` is optional: left_on/right_on flow through to Polars
+    j, c = safe_join(fact, dim.healthy, how="inner", left_on="sku", right_on="sku")
+    assert c.measures[0].after == 3
+
     joined_healthy, cons = safe_join(fact, dim.healthy, on="sku", how="inner", measures=UNITS)
     orphans = fact.lazy().join(dim.healthy, on="sku", how="anti")
 

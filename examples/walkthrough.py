@@ -32,17 +32,20 @@ print(orders)
 # 1 ── triage: partition instead of fail ──────────────────────────────────────
 hr("2. dti.triage(frame, checks) → healthy, sick, report   (one lazy pass)")
 checks = [
-    dti.unique("order_id"),                       # both copies of 102 AND the null key
+    dti.unique("order_id"),                       # -> order_id.duplicated (both copies of 102) + order_id.null
     dti.not_null("ship_to"),
     dti.in_range("qty", 1, 999),
     dti.in_set("region", ["NA", "EU"]),
-    # the escape hatch: any Polars expression, here a cross-field rule
-    dti.sick("eu.needs_ship_to", (pl.col("region") == "EU") & pl.col("ship_to").is_null()),
+    # the escape hatch: any Polars expression, here a cross-field rule — with a brief that says what a hit MEANS
+    dti.sick("eu.needs_ship_to", (pl.col("region") == "EU") & pl.col("ship_to").is_null(),
+             brief="EU orders need a ship-to"),
 ]
 r = dti.triage(orders, checks)
 
 print("r.report — one row per check:")
 print(r.report.select("check_id", "dimension", "n_failed", "n_total", "frac_failed", "passed"))
+print("\n…and each check's brief (builders fill a default; you override when the name would mislead):")
+print(r.report.select("check_id", "brief"))
 
 print("\nr.sick — every row carries `why`, the checks that condemned it:")
 print(r.sick.collect())

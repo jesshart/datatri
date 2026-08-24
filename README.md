@@ -7,16 +7,17 @@ import polars as pl
 import datatri as dti
 
 checks = [
-    dti.unique("order_id"),                   # both copies of a dup go to the doctor
+    dti.unique("order_id"),                   # -> order_id.duplicated + order_id.null, each its own reason
     dti.not_null("ship_to"),
     dti.in_range("qty", 1, 999),
     dti.in_set("region", ["NA", "EU"], tags={"owner": "Planning"}),
-    dti.sick("eu.needs_ship_to", (pl.col("region") == "EU") & pl.col("ship_to").is_null()),
+    dti.sick("eu.needs_ship_to", (pl.col("region") == "EU") & pl.col("ship_to").is_null(),
+             brief="EU orders need a ship-to"),   # say what a hit MEANS; builders fill a default
 ]
 
 r = dti.triage(orders, checks, surface="orders-input")
 
-r.report            # one row per check: n_failed, n_total, frac_failed, passed, + tags
+r.report            # one row per check: brief, n_failed, n_total, frac_failed, passed, + tags
 r.healthy           # LazyFrame — flows on
 r.sick              # LazyFrame — carries `why: list[str]`, the checks that condemned each row
 r.failures()        # one row per (check × condemned row)

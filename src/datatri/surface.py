@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from datatri.check import Check
+from datatri.check import Check, flatten
 from datatri.triage import TriageResult, triage
 
 
@@ -22,11 +22,11 @@ class Surface:
     name: str
     checks: tuple[Check, ...]
 
-    def __init__(self, name: str, checks: Iterable[Check]) -> None:
+    def __init__(self, name: str, checks: Iterable[Check | Iterable[Check]]) -> None:
         if not name:
             raise ValueError("surface name must be non-empty")
         object.__setattr__(self, "name", name)
-        object.__setattr__(self, "checks", tuple(checks))
+        object.__setattr__(self, "checks", flatten(checks))
 
     def triage(self, frame: pl.DataFrame | pl.LazyFrame) -> TriageResult:
         return triage(frame, self.checks, surface=self.name)
