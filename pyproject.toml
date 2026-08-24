@@ -1,0 +1,24 @@
+[project]
+name = "datatri"
+version = "0.1.0"
+description = "Triage data instead of failing on it. Pure Polars, lazy, one pass."
+readme = "README.md"
+authors = [
+    { name = "Jesse Hartman", email = "hello@jessehartman.dev" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "polars>=1.44.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.4,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

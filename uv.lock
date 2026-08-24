@@ -1,0 +1,111 @@
+version = 1
+revision = 3
+requires-python = ">=3.13"
+
+[[package]]
+name = "colorama"
+version = "0.4.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697, upload-time = "2022-10-25T02:36:22.414Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
+]
+
+[[package]]
+name = "datatri"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "polars" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "polars", specifier = ">=1.44.0" }]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.1.1" }]
+
+[[package]]
+name = "iniconfig"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc35312d08ba8bf51fdd999c576889fc2c24cb97f4f10/iniconfig-2.3.0.tar.gz", hash = "sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730", size = 20503, upload-time = "2025-10-18T21:55:43.219Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
+]
+
+[[package]]
+name = "packaging"
+version = "26.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7d/fa/3944b40b07da9ce895c0e6303a5ab7d53da063554f534556b134a54d6093/packaging-26.3.tar.gz", hash = "sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79", size = 313412, upload-time = "2026-08-04T18:15:28.737Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl", hash = "sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c", size = 129956, upload-time = "2026-08-04T18:15:27.159Z" },
+]
+
+[[package]]
+name = "pluggy"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
+name = "polars"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "polars-runtime-32" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7c/ff/94fd6c318da5ad55effff289cf232b6378fd7689ae8ce779c1a61ef27b49/polars-1.44.0.tar.gz", hash = "sha256:6cab3691eac679956aa833e7d015e582d6590fd39f3ad707f6c5d4ca89fa0488", size = 765633, upload-time = "2026-08-24T09:38:12.621Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/38/41/b347e6a1d8740d2911b97e927c2d5791d69beed977b5a6e827e455631465/polars-1.44.0-py3-none-any.whl", hash = "sha256:37facc6cca424040f336def717f25124aea6f68545a6ca1fefa5f049ce053ec9", size = 865200, upload-time = "2026-08-24T09:36:22.606Z" },
+]
+
+[[package]]
+name = "polars-runtime-32"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/77/6c/7bd2f5538649aa8c9265d3154e644494ac356e89d4071f2a386e474750ae/polars_runtime_32-1.44.0.tar.gz", hash = "sha256:4b39023054a33e52a759cf0d040db81b5f4194d6021458a14d2d830284ea65f7", size = 3169025, upload-time = "2026-08-24T09:38:14.369Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a2/6b/024abbc09eeedac2ac2a3002c0dfceefc2af8bb23ed3b92f0b0f57f0f682/polars_runtime_32-1.44.0-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:d5513c1f9d9981c5d73efd9de8cad9aff7fc86e4af156068d190dc0f6a99bc4d", size = 53955921, upload-time = "2026-08-24T09:36:26.408Z" },
+    { url = "https://files.pythonhosted.org/packages/34/49/d3db94bb33174b0f260ed63cc29cacd164686dbf1f09588926b7e9eb75e9/polars_runtime_32-1.44.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:096b3937cb3a6efc35f80e2b34e2a21bc87c5a52f05f8b96dd75569302203617", size = 48613230, upload-time = "2026-08-24T09:36:30.579Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/13/0146193983fa54b059952766d6b7777f46e86cf08f9767eaa316ae5b4cd6/polars_runtime_32-1.44.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1c9c4cc6f3e90d7a073f44f632a2df0e8466e6cc408768fc348fa60c107ce5a8", size = 52454423, upload-time = "2026-08-24T09:36:34.105Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/37/c0fbf9bebfbc0cbce7c8756ca74dfdf111ba919e57c7f8b16b318cfbac7b/polars_runtime_32-1.44.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:975da593d19db0b800bf2c2ac88d087f2e55b1ebee9d72e3a5789941c5cce85f", size = 58553834, upload-time = "2026-08-24T09:36:38.129Z" },
+    { url = "https://files.pythonhosted.org/packages/b2/45/95d80f6b1e9ab486144e82d84d9ab1ff89ec831549a863a44b48c5e4b14d/polars_runtime_32-1.44.0-cp310-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:c66daeede0e1bcc64ec74d534e9755721e70dcf0fb2a784af32f16bdf46adadb", size = 52630157, upload-time = "2026-08-24T09:36:41.935Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/f1/054bf03c1561c1dfb278159c372d500e542c59ee2c39d41a1c99d33edbbd/polars_runtime_32-1.44.0-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:09a20c154d8f85156a6fbb4e8fdd33acbf883627d8b5758706a43ac760a66a13", size = 56444743, upload-time = "2026-08-24T09:36:45.835Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/03/9b787bc06729cf19d78d0b873e3168e1a4ba497a49180cb05fea63b881b5/polars_runtime_32-1.44.0-cp310-abi3-win_amd64.whl", hash = "sha256:64228c43a24f5cca1ab29ce47187d02d3c41466a1c07ed75d8f7899ba83bc105", size = 53697682, upload-time = "2026-08-24T09:36:50.265Z" },
+    { url = "https://files.pythonhosted.org/packages/47/35/74cd099333a1a71cf0a8e61da4a44fbb932471952ae9e633b30345854fff/polars_runtime_32-1.44.0-cp310-abi3-win_arm64.whl", hash = "sha256:059cb0dc30192de28e30d3b5bc6c4206603b11374ee1df1f7380aa85a509bbf0", size = 47275999, upload-time = "2026-08-24T09:36:54.464Z" },
+]
+
+[[package]]
+name = "pygments"
+version = "2.21.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/49/2e/ced460408999b33da6b31b0021b0f37d329e202d4169aeb164493778f25b/pygments-2.21.0.tar.gz", hash = "sha256:610ca751c9bc2492b38eb9a38a7fbc93edbbb2d7182edaf34e66ae493dee5c8c", size = 5005329, upload-time = "2026-08-17T08:02:48.824Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/46/17f022dd3e953bf20a04a028a21ec746d942f8d2af30fa0f124fa0e6a684/pygments-2.21.0-py3-none-any.whl", hash = "sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9", size = 1250147, upload-time = "2026-08-17T08:02:44.912Z" },
+]
+
+[[package]]
+name = "pytest"
+version = "9.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "iniconfig" },
+    { name = "packaging" },
+    { name = "pluggy" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e4/47/b9efed96c114afcfa3c9d3fe98a76a1d14c74a9e266d397cf6eb64be5e01/pytest-9.1.1.tar.gz", hash = "sha256:1088fbde8f2b49d95a549a195707afa7a76a3ce9bcadc26b6d71f0ffda5fe313", size = 1636369, upload-time = "2026-06-19T10:58:32.857Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl", hash = "sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c", size = 386536, upload-time = "2026-06-19T10:58:31.347Z" },
+]
