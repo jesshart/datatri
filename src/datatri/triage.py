@@ -108,8 +108,14 @@ def triage(
     return TriageResult(healthy=healthy, sick=sick, report=report, n_total=int(row[N_COL]))
 
 
-def rollup(report: pl.DataFrame, by: str | list[str]) -> pl.DataFrame:
-    """Score any facet of the report: a surface, a dimension, an owner tag."""
+def rollup(report: pl.DataFrame | Iterable[pl.DataFrame], by: str | list[str]) -> pl.DataFrame:
+    """Score any facet of a report: a surface, a dimension, an owner tag.
+
+    Pass several reports (one per surface) and they are stacked first, diagonally —
+    tag columns differ from surface to surface, and a check without a tag gets null.
+    """
+    if not isinstance(report, pl.DataFrame):
+        report = pl.concat(list(report), how="diagonal")
     return (
         report.group_by(by)
         .agg(

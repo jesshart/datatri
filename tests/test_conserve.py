@@ -82,3 +82,16 @@ def test_triage_the_dim_then_join_healthy_conserves_the_total(fact, dirty_dim):
     assert kept + quarantined == 100  # conserved: corruption contained, sku2 orders routed upstream
     assert not cons.ok  # and the inner join honestly reports the rows it dropped
     assert [m.measure for m in cons.violations] == ["rows", "units"]
+
+
+def test_to_frame_types_mixed_measures(fact):
+    # a row count (int) next to a float sum must not crash the frame build
+    f = fact.with_columns(pl.col("units").cast(pl.Float64))
+    r = conserve(f, f.head(3), {"units": pl.col("units").sum()})
+    df = r.to_frame()
+    assert df.columns == ["measure", "before", "after", "delta", "ok"]
+    assert df["before"].dtype == pl.Float64 and df["delta"].to_list() == [-2.0, -40.0]
+    # all-int measures stay Int64; a non-numeric measure falls back to String
+    assert conserve(fact, fact.head(3), {"units": pl.col("units").sum()}).to_frame()["before"].dtype == pl.Int64
+    s = conserve(fact, fact.head(3), {"first_sku": pl.col("sku").first()}, rows=False).to_frame()
+    assert s["before"].dtype == pl.String and s["delta"].null_count() == 1

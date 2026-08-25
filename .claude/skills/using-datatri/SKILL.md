@@ -1,6 +1,6 @@
 ---
 name: using-datatri
-description: Uses datatri to triage Polars frames instead of failing on bad data — folds named checks into one lazy pass, partitions rows into healthy/sick with a per-row `why`, rolls the report up by surface/owner/dimension, and brackets joins with conservation checks that catch silent fan-out. Use when validating a DataFrame or LazyFrame, quarantining bad rows, checking grain/uniqueness/nulls/ranges/referential integrity, guarding a join or aggregate against fan-out or row loss, or writing data-quality checks in Polars.
+description: Uses datatri to triage Polars frames instead of failing on bad data — folds named checks into one lazy pass, partitions rows into healthy/sick with a per-row `why`, rolls the report up by surface/owner/dimension, and brackets joins with conservation checks that catch silent fan-out. Use when validating a DataFrame or LazyFrame, quarantining bad rows, checking grain/uniqueness/nulls/ranges/referential integrity, guarding a join or aggregate against fan-out or row loss, cascading a condemned key (a sick SKU) across the tables that reference it, or writing data-quality checks in Polars.
 allowed-tools: Bash(uv:*) Bash(python:*) Read Write Edit
 ---
 
@@ -64,6 +64,23 @@ r.sink("healthy.parquet", "sick.parquet")   # stream both sides; never a full-fr
 | filter / dedup | silent row loss | `conserve(before, after)`; expect a bounded delta |
 | read from a source you don't own | everything above | a `Surface` per input, tagged with its owner |
 
+## Cascade — condemn the key, not just the row (optional)
+
+A sick SKU in one table is suspect in every table that references it. Three rungs, each optional;
+use none and nothing changes.
+
+1. `dti.poisoned(col, keys)` / `dti.orphan(col, keys)` — ordinary checks; you bring the key set.
+   Reasons stay distinct: `sku.poisoned` is the master's defect, `sku.orphan` the child producer's.
+2. `tags={"cascade": "<entity>"}` on a check + `dti.condemned_keys(r, entity, col)` — the tag names the
+   *entity* (`sku`); `col` is the column carrying it on this surface (`item_id` on a master).
+3. `dti.Ledger` — `(entity, key, origin_surface, origin_check)`, union-only, `write`/`read` parquet so
+   separate steps share it. The loop is yours: re-triage each surface with
+   `dti.poisoned(col, led.keys(entity))` in its checks, `led.add(r, entity, col)` after, until
+   `led.sizes()` stops changing (2–3 rounds).
+
+Preview before you cascade: the report is a dry run — `dti.triage(child, [dti.poisoned(col, candidates)]).report`
+is the blast radius, and nothing moves until you route `r.sick`.
+
 ## Rules
 
 - **A check is an expression, never a collect.** Never loop `.collect()` per check; hand the
@@ -76,5 +93,10 @@ r.sink("healthy.parquet", "sick.parquet")   # stream both sides; never a full-fr
   (`<key>.duplicated`) and, separately, a null key (`<key>.null`) — that is intended; don't
   "fix" it to flag only the extra row, and don't merge the two reasons.
 - **Structural checks are free — run them first.** `dti.check_schema` reads no data.
-- **Referential integrity at scale is an anti-join,** not `is_in(column)`.
+- **Referential integrity against a column is an anti-join;** against a materialized key *set* (a
+  ledger, a master's keys) it is `is_in(keys.implode())` — small by definition, fast to 500k keys.
+- **Cascade is opt-in per check.** Only checks tagged `cascade=` condemn an entity; a row-level defect
+  (a negative qty) must not poison the SKU. Read the blast radius from the report before routing `sick`.
+- `dti.rollup([...reports...], by)` stacks many surfaces' reports; a bare `pl.concat` fails when tag
+  columns differ.
 - `uv run pytest` and `uv run python examples/walkthrough.py` are the living spec.

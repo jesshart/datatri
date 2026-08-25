@@ -7,9 +7,10 @@
 5. [Surface](#surface)
 6. [Schema](#schema)
 7. [Conservation](#conservation)
-8. [Where and when to validate](#where-and-when-to-validate)
-9. [Memory rules](#memory-rules)
-10. [The killer case](#the-killer-case)
+8. [Cascade](#cascade)
+9. [Where and when to validate](#where-and-when-to-validate)
+10. [Memory rules](#memory-rules)
+11. [The killer case](#the-killer-case)
 
 ## Model
 
@@ -82,11 +83,13 @@ Report columns: `check_id, surface, dimension, severity, brief, <tags…>, n_fai
 frac_failed, passed`. Tag keys are unioned across checks; a check without a tag gets null.
 
 ```python
-dti.rollup(report, by)   # by: str | list[str]  ->  checks, failing, failed_rows, pass_rate
+dti.rollup(report, by)              # by: str | list[str]  ->  checks, failing, failed_rows, pass_rate
+dti.rollup([r1.report, r2.report], by)   # several surfaces: stacked diagonally for you
 ```
 
-Any column works: `"surface"`, `"dimension"`, `"owner"`, `["surface", "owner"]`. Concatenate
-reports from several surfaces before rolling up.
+Any column works: `"surface"`, `"dimension"`, `"owner"`, `["surface", "owner"]`. Pass a list to
+roll up several surfaces — tag columns differ from surface to surface, so a bare `pl.concat` raises;
+`rollup` (or `pl.concat(..., how="diagonal")`) stacks them with nulls where a tag is absent.
 
 ## Surface
 
@@ -114,7 +117,7 @@ types are exact: `Datetime("us","UTC") != Datetime("ns","UTC")`, `List(Int32) !=
 
 ```python
 cons = dti.conserve(before, after, measures={"units": pl.col("units").sum()}, rows=True, tol=0.0)
-cons.ok; cons.violations; cons.to_frame()     # measure, before, after, ok
+cons.ok; cons.violations; cons.to_frame()     # measure, before, after, delta, ok
 
 joined, cons = dti.safe_join(left, right, on=None, how="left", measures=..., tol=0.0, **join_kwargs)
 ```
@@ -122,7 +125,9 @@ joined, cons = dti.safe_join(left, right, on=None, how="left", measures=..., tol
 `on` is optional — `left_on=` / `right_on=` pass through to Polars.
 
 - `conserve` compares one row of aggregates per side. `rows` adds `pl.len()`. `tol` applies to
-  numeric measures.
+  numeric measures. `to_frame()` types `before`/`after` by content (Int64 / Float64 / String) and
+  adds `delta`; rows *down* while a measure goes *up* is the fan-out signature that a row count
+  alone would read as "filtering".
 - `safe_join` reports conservation of the **left** side and never raises. Pass Polars' own
   guard through to hard-stop instead: `validate="m:1"` raises `ComputeError` at collect with
   no key detail — cheap happy path; run `dti.triage(right, [dti.unique(key)])` only on
@@ -140,6 +145,76 @@ Operation → what it should conserve:
 | aggregate | measure total; intended grain | Σ(measure) before == after; `unique` on output key |
 | filter | only intended rows removed | row delta within a band |
 | dedup | only true duplicates removed | removed == duplicate count |
+
+## Cascade
+
+Condemn a *key*, not just a row: a SKU sick in one table is suspect in every table that references
+it. Lives in `datatri.cascade`; `triage`, `check` and `surface` do not know it exists. Three rungs,
+each optional — use none and nothing changes.
+
+**Rung 1 — two ordinary checks.** You bring the keys (a list, a Series, a one-column frame).
+
+| builder | sick when | id | whose defect |
+|---|---|---|---|
+| `dti.poisoned(col, keys)` | `col ∈ keys` | `col.poisoned` | the master's — the key was condemned elsewhere |
+| `dti.orphan(col, keys)` | non-null `col ∉ keys` | `col.orphan` | the child producer's — no master record |
+
+Both are `is_in(keys.implode())`: a pure expression, so the one-scan report holds. A null key is
+neither poisoned nor orphaned — that reason belongs to `not_null`. Measured: 500k keys against 5M
+rows in 0.04 s with the lowest memory of the join-based alternatives; a materialized key set is
+small by definition.
+
+**Rung 2 — tag the entity, harvest the keys.**
+
+```python
+rm = dti.triage(dim, [dti.unique("item_id", tags={"cascade": "sku"}),   # condemns the SKU
+                      dti.not_null("units_per_case")],                  # untagged: never cascades
+                surface="dim_items")
+dti.condemned_keys(rm, entity="sku", col="item_id")   # DataFrame: key, origin_check
+```
+
+The tag names the **entity**; `col` names the column that carries it on *this* surface — `item_id`
+on the master, `sku` on a fact. An untagged result returns an empty frame: no obligation.
+
+**Rung 3 — the ledger, and your loop.**
+
+```python
+led = dti.Ledger()                                   # frame: entity, key, origin_surface, origin_check
+led.add(result, entity, col) -> int                  # keys the result condemned for entity; returns how many were new
+led.add_keys(entity, keys, origin_surface=..., origin_check=...)   # from anywhere: a ticket, a plain-Polars step
+led.keys(entity, dtype=None) -> pl.Series            # stored as String; pass dtype to cast back (Int64 ids)
+led.sizes() -> {entity: n};  led.write(path);  dti.Ledger.read(path)   # read of a missing file is an empty ledger
+
+while True:
+    before = led.sizes()
+    r = dti.triage(dim, [..., dti.poisoned("item_id", led.keys("sku"), tags={"cascade": "sku"})], surface="dim")
+    led.add(r, "sku", "item_id")
+    r = dti.triage(orders, [dti.orphan("sku", dim.select("sku"), tags={"cascade": "order_id"}),
+                            dti.poisoned("sku", led.keys("sku"), tags={"cascade": "order_id"}),
+                            dti.sick("sku.recalled", pl.col("recall"), tags={"cascade": "sku"})], surface="orders")
+    led.add(r, "order_id", "order_id"); led.add(r, "sku", "sku")     # the up-edge is just another add
+    if led.sizes() == before: break
+```
+
+The loop is deliberately not a `reconcile()`: it is four lines, and keeping it in your code keeps the
+policy visible. It terminates because the ledger is monotone — a key, once in, stays in for the run —
+so rounds are bounded by the longest dependency chain (2–3 in practice), and the result does not
+depend on surface order. Union only: never remove a key mid-run.
+
+**Across steps.** `led.write("ledger.parquet")` in one step, `dti.Ledger.read(...)` in the next. The
+schema is public (`datatri.cascade.LEDGER_SCHEMA`): a plain-Polars step can append to the file and a
+bare `is_in` can consume it. Orchestrate by re-running the steps until `sizes()` stops changing.
+
+**Policy, not mechanism, is the risk.** Only checks *you* tag cascade; a row defect (a negative qty on
+one line) must not poison the SKU. Preview first — the report is a dry run by construction:
+`dti.triage(child, [dti.poisoned(col, candidates)]).report` is the blast radius and nothing moves
+until you route `r.sick`. On one production dataset a correctly tagged cascade grew 474 quarantined
+rows into ~7,650 across five tables; a mis-tagged one would have quarantined two-thirds of every table.
+
+**Strong vs soft form.** Cascading *through* the master's `healthy` set (children run
+`orphan(col, master.healthy)` alone) yields the same sick rows but conflates orphan and poisoned into
+one reason. Run both — `orphan` against the full master, `poisoned` against the ledger — so each
+reason points at its owner.
 
 ## Where and when to validate
 
@@ -166,8 +241,9 @@ I/O seam so coverage doesn't depend on anyone remembering.
   collecting flags for the whole frame.
 - Prefer more small or streamed passes over one big materialization.
 - `assert_frame_equal` materializes both sides — reference/parity only, behind `check_schema`.
-- Referential integrity: `join(how="anti")` / `"semi"`, not `is_in(column)` (deprecated as
-  ambiguous, and it materializes the keys).
+- Referential integrity against another *column*: `join(how="anti")` / `"semi"`. Against a
+  materialized key *set* (a ledger, a master's keys): `is_in(keys.implode())` — small by definition,
+  measured fast to 500k keys. Never `is_in(pl.col(...))` (deprecated as ambiguous).
 
 ## The killer case
 
