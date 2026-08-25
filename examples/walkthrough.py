@@ -150,3 +150,36 @@ with tempfile.TemporaryDirectory() as tmp:
     r.sink(p / "healthy.parquet", p / "sick.parquet")
     print(f"healthy.parquet: {pl.scan_parquet(p / 'healthy.parquet').select(pl.len()).collect().item()} rows")
     print(f"sick.parquet:    {pl.scan_parquet(p / 'sick.parquet').select(pl.len()).collect().item()} rows  (with `why`)")
+
+
+# 9 ── cascade: condemn the key, not just the row (optional) ──────────────────
+hr("10. Cascade — a sick SKU in one place is suspect everywhere (opt-in, per check)")
+dim = pl.DataFrame({"sku": ["sku1", "sku2", "sku2", "sku3", "sku4"], "units_per_case": [12, 6, 6, 0, 24]})
+orders2 = pl.DataFrame({"order_id": [1, 2, 3, 4, 5], "sku": ["sku1", "sku2", "sku3", "sku4", "sku9"],
+                        "recall": [False, False, False, True, False]})
+ship = pl.DataFrame({"shipment_id": [10, 11, 12, 13], "order_id": [1, 2, 4, 5]})
+
+led, rounds = dti.Ledger(), 0
+while True:                                                   # the loop is yours: four lines, policy visible
+    rounds += 1
+    before = led.sizes()
+    rd = dti.triage(dim, [dti.unique("sku", tags={"cascade": "sku"}),
+                          dti.in_range("units_per_case", 1, tags={"cascade": "sku"}),
+                          dti.poisoned("sku", led.keys("sku"), tags={"cascade": "sku"})], surface="dim")
+    led.add(rd, "sku", "sku")
+    ro = dti.triage(orders2, [dti.orphan("sku", dim.select("sku"), tags={"cascade": "order_id"}),
+                              dti.poisoned("sku", led.keys("sku"), tags={"cascade": "order_id"}),
+                              dti.sick("sku.recalled", pl.col("recall"), tags={"cascade": "sku"},
+                                       brief="recalled: the SKU is suspect everywhere")], surface="orders")
+    led.add(ro, "order_id", "order_id")
+    led.add(ro, "sku", "sku")                                 # the up-edge (order -> SKU) is just another add
+    rs = dti.triage(ship, [dti.poisoned("order_id", led.keys("order_id", dtype=pl.Int64))], surface="shipments")
+    if led.sizes() == before:
+        break
+
+print(f"converged in {rounds} rounds — the ledger is the provenance:")
+print(led.frame)
+print("\nshipments condemned by cascade, with why:")
+print(rs.sick.collect())
+print("\none scorecard across surfaces (rollup stacks the reports diagonally):")
+print(dti.rollup([rd.report, ro.report, rs.report], "surface"))

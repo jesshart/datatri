@@ -174,3 +174,12 @@ def test_accepts_lazy_and_eager(dirty):
     a = triage(dirty, CHECKS)
     b = triage(dirty.lazy(), CHECKS)
     assert a.report.equals(b.report) and a.n_total == b.n_total == dirty.height
+
+
+def test_rollup_accepts_many_reports_with_different_tags(dirty):
+    a = triage(dirty, [unique("id", tags={"owner": "A"})], surface="one").report
+    b = triage(dirty, [not_null("amount", tags={"team": "B"})], surface="two").report  # different tag column
+    with pytest.raises(pl.exceptions.ShapeError):
+        pl.concat([a, b])  # the trap this saves you from
+    out = rollup([a, b], "surface")
+    assert out["surface"].to_list() == ["one", "two"] and out["checks"].to_list() == [2, 1]

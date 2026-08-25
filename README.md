@@ -22,6 +22,7 @@ r.healthy           # LazyFrame — flows on
 r.sick              # LazyFrame — carries `why: list[str]`, the checks that condemned each row
 r.failures()        # one row per (check × condemned row)
 dti.rollup(r.report, "owner")
+dti.rollup([r.report, other.report], "surface")   # many surfaces: stacked diagonally for you
 
 r.sink("healthy.parquet", "sick.parquet")  # stream both sides; never a full-frame collect
 r.raise_if_blocked()                        # opt-in: only `severity="block"` checks can stop you
@@ -34,10 +35,40 @@ A record-level suite says every row is healthy. A join can still silently fan ou
 ```python
 joined, cons = dti.safe_join(fact, dim, on="sku", measures={"units": pl.col("units").sum()})
 cons.ok                  # False: rows 5 -> 7, units 100 -> 150
-cons.to_frame()
+cons.to_frame()          # measure, before, after, delta, ok
 ```
 
 Quarantine the dirty dimension first, then join the healthy side — the total is conserved.
+
+## Condemn the key, not just the row (optional)
+
+A sick SKU in one table is suspect in every table that references it. Cascade is opt-in, one rung
+at a time; use none of it and nothing changes.
+
+```python
+# rung 1 — two ordinary checks; you bring the keys
+dti.poisoned("sku", recalled_skus)             # sku ∈ keys condemned elsewhere   -> sku.poisoned (the master's defect)
+dti.orphan("sku", dim.select("sku"))           # non-null sku with no master row  -> sku.orphan   (the producer's defect)
+
+# rung 2 — tag a check with the ENTITY it condemns, then harvest the keys from the result
+rm = dti.triage(dim, [dti.unique("item_id", tags={"cascade": "sku"})], surface="dim")
+dti.condemned_keys(rm, entity="sku", col="item_id")     # key, origin_check   (entity != column on a master)
+
+# rung 3 — a ledger between surfaces, and between pipeline steps via parquet
+led = dti.Ledger()
+while True:                                              # the loop is yours — four lines keep the policy visible
+    before = led.sizes()
+    led.add(dti.triage(dim, [dti.unique("item_id", tags={"cascade": "sku"}),
+                             dti.poisoned("item_id", led.keys("sku"), tags={"cascade": "sku"})], surface="dim"), "sku", "item_id")
+    led.add(dti.triage(orders, [dti.poisoned("sku", led.keys("sku"), tags={"cascade": "order_id"})], surface="orders"), "order_id", "order_id")
+    if led.sizes() == before: break
+led.frame                                                # entity, key, origin_surface, origin_check — the provenance
+led.write("ledger.parquet"); dti.Ledger.read("ledger.parquet")
+```
+
+Preview before you cascade: the report is a dry run, so `dti.triage(orders, [dti.poisoned("sku", candidates)]).report`
+is the blast radius and nothing moves until you route `r.sick`. Only checks you tag cascade — a negative
+quantity on one line must not poison the SKU.
 
 ## The rules the design is built on
 
@@ -56,6 +87,7 @@ Quarantine the dirty dimension first, then join the healthy side — the total i
 | `triage`      | `triage()`, `TriageResult`, `rollup()`                         |
 | `schema`      | `check_schema()` — dtype-exact, free                           |
 | `conserve`    | `conserve()`, `safe_join()` — operation-level checks           |
+| `cascade`     | `poisoned()`, `orphan()`, `condemned_keys()`, `Ledger` — condemn a key, not a row (optional) |
 
 ```
 uv run pytest

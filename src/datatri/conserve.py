@@ -45,11 +45,24 @@ class ConserveResult:
         return [m for m in self.measures if not m.ok]
 
     def to_frame(self) -> pl.DataFrame:
+        """One row per measure: ``measure, before, after, delta, ok``.
+
+        ``before``/``after`` are typed by what the measures hold — Int64 when all are
+        integers, Float64 when a row count sits next to a float sum (the common case),
+        String otherwise. ``delta`` is ``after - before`` for numeric measures. A join
+        that drops rows *and* grows a measure shows as a negative and a positive delta
+        side by side: the fan-out signature a row count alone would call "filtering".
+        """
+        before = _typed([m.before for m in self.measures])
+        after = _typed([m.after for m in self.measures])
+        numeric = before.dtype.is_numeric() and after.dtype.is_numeric()
+        delta = (after - before) if numeric else pl.Series([None] * len(self.measures), dtype=pl.Float64)
         return pl.DataFrame(
             {
                 "measure": [m.measure for m in self.measures],
-                "before": [m.before for m in self.measures],
-                "after": [m.after for m in self.measures],
+                "before": before,
+                "after": after,
+                "delta": delta,
                 "ok": [m.ok for m in self.measures],
             }
         )
@@ -104,3 +117,12 @@ def safe_join(
 
 def _lazy(frame: pl.DataFrame | pl.LazyFrame) -> pl.LazyFrame:
     return frame.lazy() if isinstance(frame, pl.DataFrame) else frame
+
+
+def _typed(values: list) -> pl.Series:
+    present = [v for v in values if v is not None]
+    if all(isinstance(v, int) and not isinstance(v, bool) for v in present):
+        return pl.Series(values, dtype=pl.Int64)
+    if all(isinstance(v, Number) and not isinstance(v, bool) for v in present):
+        return pl.Series([None if v is None else float(v) for v in values], dtype=pl.Float64)
+    return pl.Series([None if v is None else str(v) for v in values], dtype=pl.String)
